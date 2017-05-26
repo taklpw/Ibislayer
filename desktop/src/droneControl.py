@@ -5,9 +5,9 @@
 # between Leap Motion and you, your company or other organization.             #
 ################################################################################
 
-#import cv2
-#import getch
+import os
 import signal
+import csv
 import sys
 sys.path.insert(0, "../lib/leap")
 import Leap, thread, time
@@ -49,7 +49,11 @@ handPitch = 0
 handYaw = 0
 handLevel = 0
 handCount = 0
+
+# Other Global Variables
 landed = True
+navData = []
+NDC = drone.NavDataCount
 
 # Leap Motion Listener
 class SampleListener(Leap.Listener):
@@ -64,7 +68,7 @@ class SampleListener(Leap.Listener):
     def on_disconnect(self, controller):
         # Note: not dispatched when running in a debugger.
         print "Disconnected"
-        drone.land()
+        drone.stop()
 
     def on_exit(self, controller):
         print "Exited"
@@ -105,7 +109,6 @@ class SampleListener(Leap.Listener):
 
 
 def main():
-
     # Create a sample listener and controller
     listener = SampleListener()
     controller = Leap.Controller()
@@ -113,14 +116,29 @@ def main():
     # Have the sample listener receive events from the controller
     controller.add_listener(listener)
 
-    print "Press Enter to quit..."
+    print "Press Space Bar to quit..."
 
     while 1:
-        #if msvcrt.kbhit():
-	    #if ord(msvcrt.getch()) == 27:
-                #sys.exit()
+	# Exit program if spacebar is hit
+	if drone.getKey() == ' ':
+	    drone.land()
 
+	    # Store data in CSV
+	    with open("../data/output.csv", "wb") as f:
+	        writer = csv.writer(f)
+                writer.writerows(navData)
+
+            # Remove Leap listener
+	    controller.remove_listener(listener)
+
+            # Exit the program
+	    sys.exit(0)
+
+	# Control Drone
         dronecontrolling()
+
+        # Log Data
+        logData()
 
 
 def dronecontrolling():
@@ -137,14 +155,14 @@ def dronecontrolling():
 
     # Land and takeoff depending on whether your hand is open or closed
     if (handClosed and not landed) or (handCount < 1 and not landed):
-        drone.land()
-        drone.stop()
+        #drone.land()
+        #drone.stop()
         print "Land"
         landed = True
     elif not handClosed and landed and handCount > 0:
-        drone.takeoff()
+        #drone.takeoff()
         print "Calibrating, Please Wait"
-        time.sleep(7.5)
+        #time.sleep(7.5)
         print "Take Off"
         landed = False
 
@@ -163,7 +181,7 @@ def dronecontrolling():
     if not landed:
         # Delay to allow time between sending commands
         time.sleep(0.01)
-        drone.move(rollVal, pitchVal, thrustVal, yawVal)
+        #drone.move(rollVal, pitchVal, thrustVal, yawVal)
     return
 
 
@@ -201,6 +219,35 @@ def deadZone(inputNum, thresh):
         return inputNum - thresh
     if inputNum < 0:
 	return inputNum + thresh
+
+
+# Log data from the drone when in flight at a rate of 15Hz
+def logData():
+    # Navigation Data Count
+    global NDC
+    # Stores data in the form of [time, alititude, roll, pitch, yaw, x speed, y speed, z speed]
+    global navData
+
+    # If new data is here
+    if drone.NavDataCount > NDC:
+
+        # Collect Data
+        recieveTime = drone.NavDataTimeStamp
+        decodeTime = drone.NavDataDecodingTime
+        navTime = recieveTime - decodeTime
+        navAltitude = drone.NavData["demo"][3]
+        navRoll = drone.NavData["demo"][2][1]
+        navPitch = drone.NavData["demo"][2][0]
+        navYaw = drone.NavData["demo"][2][2]
+        xSpeed = drone.NavData["demo"][4][0]
+        ySpeed = drone.NavData["demo"][4][1]
+        zSpeed = drone.NavData["demo"][4][2]
+
+     	# Store Data
+    	navData.append([navTime, navAltitude, navRoll, navPitch, navYaw, xSpeed, ySpeed, zSpeed])
+    	NDC = drone.NavDataCount
+    return
+
 
 if __name__ == "__main__":
     main()
