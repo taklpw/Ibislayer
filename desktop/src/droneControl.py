@@ -7,6 +7,7 @@
 
 #import cv2
 #import getch
+import signal
 import sys
 sys.path.insert(0, "../lib/leap")
 import Leap, thread, time
@@ -33,13 +34,13 @@ drone.trim()
 drone.getSelfRotation(5)
 
 ##### Mainprogram begin #####
-#drone.setConfigAllID()                                       # Go to multiconfiguration-mode
-##drone.sdVideo()                                              # Choose lower resolution (hdVideo() for...well, guess it)
-#drone.frontCam()                                             # Choose front view
-#CDC = drone.ConfigDataCount
-#while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until it is done (after resync is done)
-#drone.startVideo()                                           # Start video-function
-#drone.showVideo()                                            # Display the video
+drone.setConfigAllID()                                       # Go to multiconfiguration-mode
+drone.sdVideo()                                              # Choose lower resolution (hdVideo() for...well, guess it)
+drone.frontCam()                                             # Choose front view
+CDC = drone.ConfigDataCount
+while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until it is done (after resync is done)
+drone.startVideo()                                           # Start video-function
+drone.showVideo()                                            # Display the video
 
 # Global Variables from Leap Input
 handClosed = True
@@ -63,11 +64,12 @@ class SampleListener(Leap.Listener):
     def on_disconnect(self, controller):
         # Note: not dispatched when running in a debugger.
         print "Disconnected"
+        drone.land()
 
     def on_exit(self, controller):
         print "Exited"
 
-    # When a new frame is detected
+    # When a new frame is detectedrol
     def on_frame(self, controller):
         # Get the most recent frame from the Leap
         frame = controller.frame()
@@ -96,7 +98,6 @@ class SampleListener(Leap.Listener):
             # Send hand information to global variables
             normal = hand.palm_normal
             direction = hand.direction
-
             handPitch = direction.pitch
             handRoll = normal.roll
             handYaw = direction.yaw
@@ -123,9 +124,18 @@ def main():
 
 
 def dronecontrolling():
+    # Use global variablkes
     global landed
     global drone
-    print "incontrol"
+
+    # Initialise local variables (lower numbers = higher sensitivity)
+    rollSens = 100	 # Roll Sensitivity, nominally between 100 and 180
+    pitchSens = 70	 # Pitch Sensitivity, nominally between 100 and 180
+    yawSens = 100	 # Yaw Sensitivity, nominally between 100 and 180
+    thrustSensLow = 100  # Low Value of thrust sensitivity, nominally around 50 to 100
+    thrustSensHigh = 400 # High Value of thrust sensitivity, nominally around 400-500
+
+    # Land and takeoff depending on whether your hand is open or closed
     if (handClosed and not landed) or (handCount < 1 and not landed):
         drone.land()
         drone.stop()
@@ -133,30 +143,36 @@ def dronecontrolling():
         landed = True
     elif not handClosed and landed and handCount > 0:
         drone.takeoff()
+        print "Calibrating, Please Wait"
+        time.sleep(7.5)
         print "Take Off"
         landed = False
 
-    rollVal = mapVals(-handRoll * Leap.RAD_TO_DEG, -100, 100, -1, 1 )
-    pitchVal = mapVals(-handPitch * Leap.RAD_TO_DEG, -100, 100, -1, 1)
-    yawVal = mapVals(handYaw * Leap.RAD_TO_DEG, -100, 100, -1, 1)
-    thrustVal = mapVals(handLevel, 100, 400, -1, 1)
+    # Scale values between
+    rollVal = mapVals(-handRoll * Leap.RAD_TO_DEG, -rollSens, rollSens, -1, 1 )
+    pitchVal = mapVals(-handPitch * Leap.RAD_TO_DEG, -pitchSens, pitchSens, -1, 1)
+    yawVal = mapVals(handYaw * Leap.RAD_TO_DEG, -yawSens, yawSens, -1, 1)
+    thrustVal = mapVals(handLevel, thrustSensLow, thrustSensHigh, -1, 1)
 
     # Cap Values at 1 and -1
+    rollVal = deadZone(capVals(rollVal), 0.1)
+    pitchVal = deadZone(capVals(pitchVal), 0.1)
+    yawVal = deadZone(capVals(yawVal), 0.1)
+    thrustVal = deadZone(capVals(thrustVal), 0.1)
 
-
-    rollVal = capVals(rollVal)
-    pitchVal = capVals(pitchVal)
-    yawVal = capVals(yawVal)
-    thrustVal = capVals(thrustVal)
-    print pitchVal
-    drone.move(rollVal, pitchVal, thrustVal, yawVal)
+    if not landed:
+        # Delay to allow time between sending commands
+        time.sleep(0.01)
+        drone.move(rollVal, pitchVal, thrustVal, yawVal)
     return
 
 
+# Map input values between two values
 def mapVals(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
+# Cap the input value between -1 and 1
 def capVals(val):
     if val is None:
 	val = 0
@@ -168,6 +184,23 @@ def capVals(val):
     else:
         return val
 
+
+# Deadzone the controls so neutral position is better
+def deadZone(inputNum, thresh):
+    if inputNum > 0:
+        if inputNum-thresh < 0:
+	    return 0
+    elif inputNum < 0:
+	if -inputNum-thresh < 0:
+	    return 0
+    elif inputNum == 0:
+	return 0
+
+    # Smooths deadzone
+    if inputNum > 0:
+        return inputNum - thresh
+    if inputNum < 0:
+	return inputNum + thresh
 
 if __name__ == "__main__":
     main()
