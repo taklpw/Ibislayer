@@ -1,13 +1,10 @@
-###################################################################
-# Ibis Slayer Drone                                               #
-# Authors: Akash Bhatia, Bill Wang, Kelly Lynch, Taylor Barker    #
-# Description: Parrot A.R Drone 2.0 controlled by your hand with  #
-# a Leap Motion.                                                  #
-# TODO: Make this drone a total coward by backing away from       #
-# everything.                                                     #
-###################################################################
+################################################################################
+# Leap Motion proprietary and confidential. Not for distribution.              #
+# Use subject to the terms of the Leap Motion SDK Agreement available at       #
+# https://developer.leapmotion.com/sdk_agreement, or another agreement         #
+# between Leap Motion and you, your company or other organization.             #
+################################################################################
 
-# Imports
 import os
 import signal
 import csv
@@ -17,17 +14,17 @@ import Leap, thread, time
 sys.path.insert(0, "../lib/psdrone")
 import ps_drone
 
+
 # Configure & Connect to Drone
 drone = ps_drone.Drone()
 drone.startup()
 drone.reset()
 
-# Get Drone Battery Level, Quit if battery is too low
+# Get Drone Battery Level
 while(drone.getBattery()[0]==-1): time.sleep(0.1)
 print "Battery: "+str(drone.getBattery()[0])+"% "+str(drone.getBattery()[1])
 if drone.getBattery()[1] == "empty": sys.exit()
 
-# Use the demo NavData package (15Hz Sensors)
 drone.useDemoMode(True)
 drone.getNDpackage(["demo"])
 time.sleep(0.5)
@@ -36,14 +33,14 @@ time.sleep(0.5)
 drone.trim()
 drone.getSelfRotation(5)
 
-# Camera Setup
+##### Mainprogram begin #####
 drone.setConfigAllID()                                       # Go to multiconfiguration-mode
-drone.sdVideo()                                              # SD Video
-drone.frontCam()                                             # Choose front view (There is no other view)
+drone.sdVideo()                                              # Choose lower resolution (hdVideo() for...well, guess it)
+drone.frontCam()                                             # Choose front view
 CDC = drone.ConfigDataCount
-while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until Configuration is done
-drone.startVideo()                                           # Start video
-drone.showVideo()                                            # Display the video using OpenCV
+while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until it is done (after resync is done)
+drone.startVideo()                                           # Start video-function
+drone.showVideo()                                            # Display the video
 
 # Global Variables from Leap Input
 handClosed = True
@@ -56,7 +53,7 @@ handCount = 0
 # Other Global Variables
 landed = True
 navData = []
-NDC = drone.NavDataCount
+NCD = drone.NavDataCount
 
 # Leap Motion Listener
 class SampleListener(Leap.Listener):
@@ -112,11 +109,11 @@ class SampleListener(Leap.Listener):
 
 
 def main():
-    # Create a Leap listener and controller
+    # Create a sample listener and controller
     listener = SampleListener()
     controller = Leap.Controller()
 
-    # Add Leap Motion Listener (runs like an interrupt)
+    # Have the sample listener receive events from the controller
     controller.add_listener(listener)
 
     print "Press Space Bar to quit..."
@@ -126,8 +123,8 @@ def main():
 	if drone.getKey() == ' ':
 	    drone.land()
 
-	    # Store Navigation data in CSV
-	    with open("../data/output.csv", "wb") as f:
+	    # Store data in CSV
+	    with open("output.csv", "wb") as f:
 	        writer = csv.writer(f)
                 writer.writerows(navData)
 
@@ -142,9 +139,6 @@ def main():
 
         # Log Data
         logData()
-
-        #Collect Flight info and display it
-        #uiDisp()
 
 
 def dronecontrolling():
@@ -161,34 +155,33 @@ def dronecontrolling():
 
     # Land and takeoff depending on whether your hand is open or closed
     if (handClosed and not landed) or (handCount < 1 and not landed):
-        drone.land()
-        drone.stop()
+        #drone.land()
+        #drone.stop()
         print "Land"
         landed = True
     elif not handClosed and landed and handCount > 0:
-        drone.takeoff()
+        #drone.takeoff()
         print "Calibrating, Please Wait"
-        time.sleep(7.5)
+        #time.sleep(7.5)
         print "Take Off"
         landed = False
 
-    # Scale values based on sensitivity
+    # Scale values between
     rollVal = mapVals(-handRoll * Leap.RAD_TO_DEG, -rollSens, rollSens, -1, 1 )
     pitchVal = mapVals(-handPitch * Leap.RAD_TO_DEG, -pitchSens, pitchSens, -1, 1)
     yawVal = mapVals(handYaw * Leap.RAD_TO_DEG, -yawSens, yawSens, -1, 1)
     thrustVal = mapVals(handLevel, thrustSensLow, thrustSensHigh, -1, 1)
 
-    # Cap Values at 1 and -1 and create a deadzone
+    # Cap Values at 1 and -1
     rollVal = deadZone(capVals(rollVal), 0.1)
     pitchVal = deadZone(capVals(pitchVal), 0.1)
     yawVal = deadZone(capVals(yawVal), 0.1)
     thrustVal = deadZone(capVals(thrustVal), 0.1)
 
-    # Send movement command
     if not landed:
         # Delay to allow time between sending commands
-        time.sleep(0.01) # 100Hz
-        drone.move(rollVal, pitchVal, thrustVal, yawVal)
+        time.sleep(0.01)
+        #drone.move(rollVal, pitchVal, thrustVal, yawVal)
     return
 
 
@@ -210,7 +203,7 @@ def capVals(val):
         return val
 
 
-# Deadzone the controls so neutral hand position feels better
+# Deadzone the controls so neutral position is better
 def deadZone(inputNum, thresh):
     if inputNum > 0:
         if inputNum-thresh < 0:
@@ -221,7 +214,7 @@ def deadZone(inputNum, thresh):
     elif inputNum == 0:
 	return 0
 
-    # Smooths deadzone so it doesn't jump when exited
+    # Smooths deadzone
     if inputNum > 0:
         return inputNum - thresh
     if inputNum < 0:
@@ -230,13 +223,10 @@ def deadZone(inputNum, thresh):
 
 # Log data from the drone when in flight at a rate of 15Hz
 def logData():
-    # Navigation Data Count
     global NDC
-    # Stores data in the form of [time, alititude, roll, pitch, yaw, x speed, y speed, z speed]
     global navData
-
-    # If new data is here
-    if drone.NavDataCount > NDC:
+    if NavDataCount > NDC:
+        # Stores data in the form of [time, aliti
 
         # Collect Data
         recieveTime = drone.NavDataTimeStamp
@@ -250,41 +240,13 @@ def logData():
         ySpeed = drone.NavData["demo"][4][1]
         zSpeed = drone.NavData["demo"][4][2]
 
-     	# Store Data
-    	navData.append([navTime, navAltitude, navRoll, navPitch, navYaw, xSpeed, ySpeed, zSpeed])
-    	NDC = drone.NavDataCount
+     # Store Data
+    navData.append([navTime, navAltitude, navRoll, navPitch, navYaw, xSpeed, ySpeed, zSpeed])
+    NDC = drone.NavDataCount
     return
 
 
-# Inputs: Battery Level, Yaw, Pitch, Roll, Altitude, Emergency Status
-# Outputs: Displays information to the user via the terminal
-#def uiDisp():
-#    #Collect Variables
-#    battLevel =drone.getBattery()[0]
-#    yaw = drone.NavData["Demo"][2][1]
-#    pitch = drone.NavData["Demo"][2][0]
-#    roll = drone.NavData["Demo"][2][2]
-#    alt = drone.NavData["Demo"][3]
-
-    # Collect information on the status of the drone
-#    if drone.State[0] == 0:
-#        status = "Drone has landed"
-#    elif drone.State[0] == 1:
-#        status = "Drone is flying"
-#    elif drone.State[31] == 1:
-#        status = "Drone has crashed"
-
-#    print battLevel
-#    print yaw
-#    print pitch
-#    print roll
-#    print alt
-#    print status
-
-#    unused_var = os.system('clear')
-#    return
-
-
-# Run the Main Function
 if __name__ == "__main__":
     main()
+
+
