@@ -89,7 +89,7 @@ void loop() {
 
   //increase dataCount value
   dataCount++;
-  delay(250);
+  delay(10);
 
   
 
