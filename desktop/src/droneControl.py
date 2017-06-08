@@ -19,6 +19,7 @@ sys.path.insert(0, "../lib/leap")
 import Leap, thread, time
 sys.path.insert(0, "../lib/psdrone")
 import ps_drone
+import subprocess
 
 # Configure & Connect to Drone
 drone = ps_drone.Drone()
@@ -40,13 +41,13 @@ drone.trim()
 drone.getSelfRotation(5)
 
 # Camera Setup
-drone.setConfigAllID()                                       # Go to multiconfiguration-mode
-drone.sdVideo()                                              # SD Video
-drone.frontCam()                                             # Choose front view (There is no other view)
-CDC = drone.ConfigDataCount
-while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until Configuration is done
-drone.startVideo()                                           # Start video
-drone.showVideo()                                            # Display the video using OpenCV
+#drone.setConfigAllID()                                       # Go to multiconfiguration-mode
+#drone.sdVideo()                                              # SD Video
+#drone.frontCam()                                             # Choose front view (There is no other #view)
+#CDC = drone.ConfigDataCount
+#while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until Configuration is done
+#drone.startVideo()                                           # Start video
+#drone.showVideo()                                            # Display the video using OpenCV
 
 # Start UI
 #screen = curses.initscr()
@@ -69,7 +70,8 @@ flightmodeDisplay = "Manual       "
 landed = True
 navData = []
 NDC = drone.NavDataCount
-
+irArray = [0, 0, 0, 0, 0, 0, 0]
+i = 0
 
 
 # Leap Motion Listener
@@ -79,7 +81,7 @@ class SampleListener(Leap.Listener):
     def on_init(self, controller):
         #print "Initialized"
         global leapStatusDisplay
-        leapStatusDisplay = "Initialising"
+        leapStatusDisplay = "Connected   "
 
     def on_connect(self, controller):
         #print "Connected"
@@ -98,6 +100,8 @@ class SampleListener(Leap.Listener):
 
     # When a new frame is detectedrol
     def on_frame(self, controller):
+        global leapStatusDisplay
+        leapStatusDisplay = "Connected   "
         # Get the most recent frame from the Leap
         frame = controller.frame()
 
@@ -132,6 +136,8 @@ class SampleListener(Leap.Listener):
 
 
 def main():
+    global piStatusDisplay
+    global irArray
     # Create a Leap listener and controller
     listener = SampleListener()
     controller = Leap.Controller()
@@ -141,12 +147,15 @@ def main():
 
     print "Press Space Bar to quit..."
 
+    # start the process
+    command = ('nc', '-l', '-p', '58')
+    ps = subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     while 1:
 	# Exit program if spacebar is hit
 	if drone.getKey() == ' ':
 	    drone.land()
 
-	    # Store Navigation data in CSV
+            # Store Navigation data in CSV
 	    with open("../data/output.csv", "wb") as f:
 	        writer = csv.writer(f)
                 writer.writerows(navData)
@@ -156,9 +165,27 @@ def main():
             
             # End screen
             curses.endwin()
-
+            ps.kill()
             # Exit the program
             sys.exit(0)
+
+        # Check which IRs are within range
+        #print "fkubill"
+        piStatusDisplay = "Connected    "
+        timeBefore = time.clock()
+        for line in execute_byline(ps):
+            if time.clock() - timeBefore > 0.01:
+                break
+              #print 'received: ' + line
+                #if line == 'quit\n':
+                 #   ps.kill()
+                  #  exit()
+         #   ps.stdin.write('you said: ' + line)
+            irArray = line.split(",")
+                #print 'element 1: ' + irArray[0]
+            break
+
+        #print 'doggo'
 
 	    # Control Drone
         dronecontrolling()
@@ -186,13 +213,13 @@ def dronecontrolling():
     if (handClosed and not landed) or (handCount < 1 and not landed):
         drone.land()
         drone.stop()
-        print "Land"
+        #print "Land"
         landed = True
     elif not handClosed and landed and handCount > 0:
-        #drone.takeoff()
-        print "Calibrating, Please Wait"
+        drone.takeoff()
+        #print "Calibrating, Please Wait"
         time.sleep(7.5)
-        print "Take Off"
+        #print "Take Off"
         landed = False
 
     # Scale values based on sensitivity
@@ -211,7 +238,7 @@ def dronecontrolling():
     if not landed:
         # Delay to allow time between sending commands
         time.sleep(0.01) # 100Hz
-        #drone.move(rollVal, pitchVal, thrustVal, yawVal)
+        drone.move(rollVal, pitchVal, thrustVal, yawVal)
     return
 
 
@@ -284,11 +311,13 @@ def logData():
 # TODO: Add IR stuff
 def uiDisp():
     # Initialise Global Variables
+    global irArray
     global leapStatusDisplay
     global piStatusDisplay
     global droneStatusDisplay
     global navData
     global flightmodeDisplay
+    global i
 
     #Collect Variables
     battDisplay = str(drone.getBattery()[0])
@@ -334,18 +363,68 @@ def uiDisp():
     screen.addstr(8,15,"degrees")
 
 	# Detection Grid
-    screen.addstr(6,60,"###"+"FF"+"###")
-    screen.addstr(7,60,"L"+"##"+"UU"+"##"+"R")
-    screen.addstr(8,60,"L"+"##"+"DD"+"##"+"R")
-    screen.addstr(9,60,"###"+"BB"+"###")
+    screen.addstr(6,60,"###"+"##"+"###")        # ###FF###
+    screen.addstr(7,60,"#"+"##"+"##"+"##"+"#")  # L##UU##R
+    screen.addstr(8,60,"#"+"##"+"##"+"##"+"#")  # L##DD##R
+    screen.addstr(9,60,"###"+"##"+"###")        # ###BB###
 
 	# Mode Display
     screen.addstr(10,1,"Flight Mode: ")
     screen.addstr(10,15, flightmodeDisplay)
 
+    #if i > 5:
+     #   i = 0
+    if len(irArray) > 6:
+        screen.addstr(12,1, "     ")
+        screen.addstr(12,1,str(irArray[1]))
+        # Show Detections
+        # Front Detection
+        if int(irArray[1]) < 35:
+            screen.addstr(6,63,"FF")
+        else:
+            screen.addstr(6,63,"##")
+        # Left Detection
+        if int(irArray[2]) < 35:
+            screen.addstr(7,60,"L")
+            screen.addstr(8,60,"L")
+        else:
+            screen.addstr(7,60,"#")
+            screen.addstr(8,60,"#")
+        # Back Detection
+        if int(irArray[3]) < 35:
+            screen.addstr(9,63,"BB")
+        else:
+            screen.addstr(9,63,"##")
+        # Right Detection
+        if int(irArray[4]) < 35:
+            screen.addstr(7,67,"R")
+            screen.addstr(8,67,"R")
+        else:
+            screen.addstr(7,67,"#")
+            screen.addstr(8,67,"#")
+        # Up Detection
+        if int(irArray[5]) < 35:
+            screen.addstr(7,63,"UU")
+        else:
+            screen.addstr(7,63,"##")
+        # Down Detection
+        if drone.NavData["demo"][3] < 20:
+            screen.addstr(8,63,"DD")
+        else:
+            screen.addstr(8,63,"##")
+
     # Update Screen
     screen.refresh()
     return
+
+# generator function
+def execute_byline(process):
+    
+    # Open a process
+    ps = process
+
+    for stdout_line in iter(ps.stdout.readline, ''):
+        yield stdout_line
 
 
 # Run the Main Function
