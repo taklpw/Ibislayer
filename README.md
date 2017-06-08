@@ -1,5 +1,11 @@
 # Ibislayer
 
+## What is in this Readme?
+- WHAT IS OUR PROJECT
+- WHAT DOES OUR PROJECT REQUIRE - HARDWARE/SOFTWARE/Libraries
+- VERSION OF PYTHON
+- HOW IT ALL WORKS
+
 ## What is This Project
 
 The Ibislayer Project, although has nothing to do with Ibis slaying, uses a Leap Motion device to fly a Parrot AR Drone 2.0. Using IR sensors and a basic UI system, it is possible to fly the drone with or without visual line of sight. The drone also has a seperate mode called automatic avoidance system, where the drone be set to take off and then avoid objects that come within 30 cm of its range.
@@ -21,13 +27,9 @@ The Ibislayer Project, although has nothing to do with Ibis slaying, uses a Leap
 
 ## Project Libraries Used
 
-- OpenCV
-- PS Drone
-- Cursors
-- NetCat
-- Leap Libraries
+- OpenCV (http://opencv.org/)
+- PS Drone (http://www.playsheep.de/drone/)
+- NetCat (http://sectools.org/tool/netcat/)
+- Leap Motion Libraries (https://developer.leapmotion.com/documentation/csharp/devguide/Leap_SDK_Overview.html)
 
-- WHAT IS OUR PROJECT
-- WHAT DOES OUR PROJECT REQUIRE - HARDWARE/SOFTWARE/Libraries
-- VERSION OF PYTHON
-- HOW IT ALL WORKS
+
