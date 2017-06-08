@@ -3,8 +3,10 @@
 # Authors: Akash Bhatia, Bill Wang, Kelly Lynch, Taylor Barker    #
 # Description: Parrot A.R Drone 2.0 controlled by your hand with  #
 # a Leap Motion.                                                  #
-# TODO: Make this drone a total coward by backing away from       #
+# TODO:                                                           #
+# - Make this drone a total coward by backing away from           #
 # everything.                                                     #
+# - Add UI                                                        #
 ###################################################################
 
 # Imports
@@ -12,6 +14,7 @@ import os
 import signal
 import csv
 import sys
+import curses
 sys.path.insert(0, "../lib/leap")
 import Leap, thread, time
 sys.path.insert(0, "../lib/psdrone")
@@ -45,6 +48,10 @@ while CDC == drone.ConfigDataCount:       time.sleep(0.0001) # Wait until Config
 drone.startVideo()                                           # Start video
 drone.showVideo()                                            # Display the video using OpenCV
 
+# Start UI
+#screen = curses.initscr()
+#screen.border(0)
+
 # Global Variables from Leap Input
 handClosed = True
 handRoll = 0
@@ -54,24 +61,37 @@ handLevel = 0
 handCount = 0
 
 # Other Global Variables
+autoMode = False
+leapStatusDisplay = "Not Connected"
+piStatusDisplay = "Not Connected"
+droneStatusDisplay = "Unknown      "
+flightmodeDisplay = "Manual       "
 landed = True
 navData = []
 NDC = drone.NavDataCount
+
+
 
 # Leap Motion Listener
 class SampleListener(Leap.Listener):
 
     # Debug information for leap connectivity
     def on_init(self, controller):
-        print "Initialized"
+        #print "Initialized"
+        global leapStatusDisplay
+        leapStatusDisplay = "Initialising"
 
     def on_connect(self, controller):
-        print "Connected"
+        #print "Connected"
+        global leapStatusDisplay
+        leapStatusDisplay = "OK          "
 
     def on_disconnect(self, controller):
         # Note: not dispatched when running in a debugger.
-        print "Disconnected"
+        #print "Disconnected"
         drone.stop()
+        global leapStatusDisplay
+        leapStatusDisplay = "Disconnected"
 
     def on_exit(self, controller):
         print "Exited"
@@ -132,19 +152,22 @@ def main():
                 writer.writerows(navData)
 
             # Remove Leap listener
-	    controller.remove_listener(listener)
+            controller.remove_listener(listener)
+            
+            # End screen
+            curses.endwin()
 
             # Exit the program
-	    sys.exit(0)
+            sys.exit(0)
 
-	# Control Drone
+	    # Control Drone
         dronecontrolling()
 
         # Log Data
         logData()
 
         #Collect Flight info and display it
-        #uiDisp()
+        uiDisp()
 
 
 def dronecontrolling():
@@ -166,7 +189,7 @@ def dronecontrolling():
         print "Land"
         landed = True
     elif not handClosed and landed and handCount > 0:
-        drone.takeoff()
+        #drone.takeoff()
         print "Calibrating, Please Wait"
         time.sleep(7.5)
         print "Take Off"
@@ -188,7 +211,7 @@ def dronecontrolling():
     if not landed:
         # Delay to allow time between sending commands
         time.sleep(0.01) # 100Hz
-        drone.move(rollVal, pitchVal, thrustVal, yawVal)
+        #drone.move(rollVal, pitchVal, thrustVal, yawVal)
     return
 
 
@@ -258,31 +281,71 @@ def logData():
 
 # Inputs: Battery Level, Yaw, Pitch, Roll, Altitude, Emergency Status
 # Outputs: Displays information to the user via the terminal
-#def uiDisp():
-#    #Collect Variables
-#    battLevel =drone.getBattery()[0]
-#    yaw = drone.NavData["Demo"][2][1]
-#    pitch = drone.NavData["Demo"][2][0]
-#    roll = drone.NavData["Demo"][2][2]
-#    alt = drone.NavData["Demo"][3]
+# TODO: Add IR stuff
+def uiDisp():
+    # Initialise Global Variables
+    global leapStatusDisplay
+    global piStatusDisplay
+    global droneStatusDisplay
+    global navData
+    global flightmodeDisplay
+
+    #Collect Variables
+    battDisplay = str(drone.getBattery()[0])
+    yawDisplay = str(drone.NavData["demo"][2][2])
+    pitchDisplay = str(drone.NavData["demo"][2][0])
+    rollDisplay = str(drone.NavData["demo"][2][1])
+    altDisplay = str(drone.NavData["demo"][3])
 
     # Collect information on the status of the drone
-#    if drone.State[0] == 0:
-#        status = "Drone has landed"
-#    elif drone.State[0] == 1:
-#        status = "Drone is flying"
-#    elif drone.State[31] == 1:
-#        status = "Drone has crashed"
+    if drone.State[0] == 0:
+        droneStatusDisplay = "Landed "
+    elif drone.State[0] == 1:
+        droneStatusDisplay = "Flying "
+    elif drone.State[31] == 1:
+        droneStatusDisplay = "Crashed"
 
-#    print battLevel
-#    print yaw
-#    print pitch
-#    print roll
-#    print alt
-#    print status
+    # Start UI
+    screen = curses.initscr()
+    curses.cbreak()
+    screen.border(0)
 
-#    unused_var = os.system('clear')
-#    return
+	# Top Line Satuses
+    screen.addstr(1,1,"Battery: " + battDisplay + "%")
+    screen.addstr(1,25,"Leap: " + leapStatusDisplay)
+    screen.addstr(1,45,"Pi: " + piStatusDisplay)
+    screen.addstr(1,65,"Drone: " + droneStatusDisplay)
+
+	# 4th Line Measurements
+    screen.addstr(4,1,"Altitude: " + altDisplay)
+    screen.addstr(4,17,"cm")
+    screen.addstr(4,60,"Closest Detection: " + "32")
+    screen.addstr(4,83,"cm")
+
+	# Roll, Pitch, & Yaw
+    screen.addstr(6,1,"Roll: ")
+    screen.addstr(6,9,rollDisplay)
+    screen.addstr(6,15,"degrees")
+    screen.addstr(7,1,"Pitch: ")
+    screen.addstr(7,9,pitchDisplay)
+    screen.addstr(7,15,"degrees")
+    screen.addstr(8,1,"Yaw: ")
+    screen.addstr(8,9,yawDisplay)
+    screen.addstr(8,15,"degrees")
+
+	# Detection Grid
+    screen.addstr(6,60,"###"+"FF"+"###")
+    screen.addstr(7,60,"L"+"##"+"UU"+"##"+"R")
+    screen.addstr(8,60,"L"+"##"+"DD"+"##"+"R")
+    screen.addstr(9,60,"###"+"BB"+"###")
+
+	# Mode Display
+    screen.addstr(10,1,"Flight Mode: ")
+    screen.addstr(10,15, flightmodeDisplay)
+
+    # Update Screen
+    screen.refresh()
+    return
 
 
 # Run the Main Function
