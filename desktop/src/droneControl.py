@@ -72,7 +72,8 @@ navData = []
 NDC = drone.NavDataCount
 irArray = [0, 0, 0, 0, 0, 0, 0]
 i = 0
-
+key_pressed = 0
+timeStart = time.clock()
 
 # Leap Motion Listener
 class SampleListener(Leap.Listener):
@@ -112,7 +113,6 @@ class SampleListener(Leap.Listener):
         global handYaw
         global handLevel
         global handCount
-
         handCount = len(frame.hands)
 
         # Get hands
@@ -138,6 +138,7 @@ class SampleListener(Leap.Listener):
 def main():
     global piStatusDisplay
     global irArray
+    global key_pressed
     # Create a Leap listener and controller
     listener = SampleListener()
     controller = Leap.Controller()
@@ -148,10 +149,11 @@ def main():
     print "Press Space Bar to quit..."
 
     # start the process
-    command = ('nc', '-l', '-p', '58')
+    command = ('nc', '-l', '-p', '59')
     ps = subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     while 1:
 	# Exit program if spacebar is hit
+
 	if drone.getKey() == ' ':
 	    drone.land()
 
@@ -170,9 +172,13 @@ def main():
             sys.exit(0)
 
         # Check which IRs are within range
-        #print "fkubill"
         piStatusDisplay = "Connected    "
         timeBefore = time.clock()
+        if drone.getKey() == 'l':
+            key_pressed = 1
+        if drone.getKey() == 't':
+            print 'fuckukeypress'
+            key_pressed = 2
         for line in execute_byline(ps):
             if time.clock() - timeBefore > 0.01:
                 break
@@ -188,7 +194,10 @@ def main():
         #print 'doggo'
 
 	    # Control Drone
-        dronecontrolling()
+        if not autoMode:
+            dronecontrolling()
+        else:
+            autoControl()
 
         # Log Data
         logData()
@@ -205,7 +214,7 @@ def dronecontrolling():
     # Initialise local variables (lower numbers = higher sensitivity)
     rollSens = 100	 # Roll Sensitivity, nominally between 100 and 180
     pitchSens = 70	 # Pitch Sensitivity, nominally between 100 and 180
-    yawSens = 100	 # Yaw Sensitivity, nominally between 100 and 180
+    yawSens = 70	 # Yaw Sensitivity, nominally between 100 and 180
     thrustSensLow = 100  # Low Value of thrust sensitivity, nominally around 50 to 100
     thrustSensHigh = 400 # High Value of thrust sensitivity, nominally around 400-500
 
@@ -239,6 +248,48 @@ def dronecontrolling():
         # Delay to allow time between sending commands
         time.sleep(0.01) # 100Hz
         drone.move(rollVal, pitchVal, thrustVal, yawVal)
+    return
+
+def autoControl():
+    global landed
+    global drone
+    global key_pressed
+
+    if key_pressed == 1:
+        drone.land()
+        drone.stop()
+        landed = True
+  
+    if (key_pressed == 2):
+	drone.takeoff()
+        #print "Calibrating, Please Wait"
+        time.sleep(7.5)
+        #print "Take Off"
+        landed = False
+    
+    if not landed:
+        # Delay to allow time between sending commands
+        time.sleep(0.01) # 100Hz
+        if int(irArray[1]) < 30:
+            if int(irArray[3]) < 30:
+                drone.stop()
+            drone.moveBackward(0.25)
+        if int(irArray[2]) < 30:
+            if int(irArray[4]) <30:
+                drone.stop()
+            drone.moveRight(0.25)
+
+        if int(irArray[3]) < 30:
+            drone.moveForward(0.25)
+        if int(irArray[4]) < 30:
+            drone.moveLeft(0.25)
+        if int(irArray[5]) < 30:
+            drone.moveDown(0.25)
+        if (drone.getKey() == 'l' and not landed):
+	    drone.land()
+            drone.stop()
+            landed = True
+                
     return
 
 
@@ -336,22 +387,23 @@ def uiDisp():
 
     # Start UI
     screen = curses.initscr()
+    curses.start_color()
+    curses.curs_set(0)
+    curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
     curses.cbreak()
     screen.border(0)
 
-	# Top Line Satuses
+    # Top Line Satuses
     screen.addstr(1,1,"Battery: " + battDisplay + "%")
     screen.addstr(1,25,"Leap: " + leapStatusDisplay)
     screen.addstr(1,45,"Pi: " + piStatusDisplay)
     screen.addstr(1,65,"Drone: " + droneStatusDisplay)
 
-	# 4th Line Measurements
+    # 4th Line Measurements
     screen.addstr(4,1,"Altitude: " + altDisplay)
     screen.addstr(4,17,"cm")
-    screen.addstr(4,60,"Closest Detection: " + "32")
-    screen.addstr(4,83,"cm")
 
-	# Roll, Pitch, & Yaw
+    # Roll, Pitch, & Yaw
     screen.addstr(6,1,"Roll: ")
     screen.addstr(6,9,rollDisplay)
     screen.addstr(6,15,"degrees")
@@ -362,59 +414,61 @@ def uiDisp():
     screen.addstr(8,9,yawDisplay)
     screen.addstr(8,15,"degrees")
 
-	# Detection Grid
+    # Detection Grid
     screen.addstr(6,60,"###"+"##"+"###")        # ###FF###
     screen.addstr(7,60,"#"+"##"+"##"+"##"+"#")  # L##UU##R
     screen.addstr(8,60,"#"+"##"+"##"+"##"+"#")  # L##DD##R
     screen.addstr(9,60,"###"+"##"+"###")        # ###BB###
 
-	# Mode Display
+    # Mode Display
     screen.addstr(10,1,"Flight Mode: ")
     screen.addstr(10,15, flightmodeDisplay)
 
     #if i > 5:
      #   i = 0
     if len(irArray) > 6:
-        screen.addstr(12,1, "     ")
-        screen.addstr(12,1,str(irArray[1]))
+        #screen.addstr(12,1, "     ")
+       # screen.addstr(12,1,str(irArray[1]))
         # Show Detections
         # Front Detection
         if int(irArray[1]) < 35:
-            screen.addstr(6,63,"FF")
+            screen.addstr(6,63,"FF", curses.color_pair(1))
         else:
-            screen.addstr(6,63,"##")
+            screen.addstr(6,63,"  ")
         # Left Detection
         if int(irArray[2]) < 35:
-            screen.addstr(7,60,"L")
-            screen.addstr(8,60,"L")
+            screen.addstr(7,60,"L", curses.color_pair(1))
+            screen.addstr(8,60,"L", curses.color_pair(1))
         else:
-            screen.addstr(7,60,"#")
-            screen.addstr(8,60,"#")
+            screen.addstr(7,60," ")
+            screen.addstr(8,60," ")
         # Back Detection
         if int(irArray[3]) < 35:
-            screen.addstr(9,63,"BB")
+            screen.addstr(9,63,"BB", curses.color_pair(1))
         else:
-            screen.addstr(9,63,"##")
+            screen.addstr(9,63,"  ")
         # Right Detection
         if int(irArray[4]) < 35:
-            screen.addstr(7,67,"R")
-            screen.addstr(8,67,"R")
+            screen.addstr(7,67,"R", curses.color_pair(1))
+            screen.addstr(8,67,"R", curses.color_pair(1))
         else:
-            screen.addstr(7,67,"#")
-            screen.addstr(8,67,"#")
+            screen.addstr(7,67," ")
+            screen.addstr(8,67," ")
         # Up Detection
         if int(irArray[5]) < 35:
-            screen.addstr(7,63,"UU")
+            screen.addstr(7,63,"UU", curses.color_pair(1))
         else:
-            screen.addstr(7,63,"##")
+            screen.addstr(7,63,"  ")
         # Down Detection
         if drone.NavData["demo"][3] < 20:
-            screen.addstr(8,63,"DD")
+            screen.addstr(8,63,"DD", curses.color_pair(1))
         else:
-            screen.addstr(8,63,"##")
+            screen.addstr(8,63,"  ")
 
     # Update Screen
     screen.refresh()
+        
+    
     return
 
 # generator function
