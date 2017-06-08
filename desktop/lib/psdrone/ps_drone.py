@@ -48,7 +48,7 @@ class Drone(object):
 		self.debug = 			False				# Shows some additional debug information
 		self.valueCorrection = 	False
 		self.selfRotation = 	0.0185				# use this value, if not checked by getSelfRotation()
-		self.stopOnComLoss = 	False				# when there is a communication-problem, drone will land or not
+		self.stopOnComLoss = 	True				# when there is a communication-problem, drone will land or not
 		
 		# Drone communication variables
 		self.DroneIP = 		"192.168.1.1"
