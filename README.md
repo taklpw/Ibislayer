@@ -2,7 +2,7 @@
 
 ## What is in this Readme?
 - WHAT IS OUR PROJECT
-- WHAT DOES OUR PROJECT REQUIRE - HARDWARE/SOFTWARE/Libraries
+- WHAT DOES OUR PROJECT REQUIRE - HARDWARE/SOFTWARE/LIBRARIES
 - VERSION OF PYTHON
 - HOW IT ALL WORKS
 
@@ -21,7 +21,7 @@ The Ibislayer Project, although has nothing to do with Ibis slaying, uses a Leap
 
 ## Project Software Requirements
 
-- Python
+- Python 2.7.13
 - Leap Software
 - Linux 
 
